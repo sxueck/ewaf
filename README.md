@@ -14,3 +14,8 @@ TODO
 * 阻断常见的 XSS 注入攻击
 * 简易临时操作面板
 * 支持 Reuseport 机制 (需要内核 >= 3.9)
+
+感谢依赖和参考库
+* WireGuard
+* Logrus
+* Echo

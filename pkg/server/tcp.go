@@ -11,20 +11,26 @@ func CreateTUNChannel() *water.Interface {
 	tunConfig := water.Config{
 		DeviceType: water.TUN,
 		PlatformSpecificParams: water.PlatformSpecificParams{
-			InterfaceName: "waf-tun0",
-			Network:       "172.16.3.0/25",
+			Name:        "waf-tun0",
+			MultiQueue:  true,
+			Permissions: &water.DevicePermissions{},
 		},
 	}
 
-	ifce, err := water.New(tunConfig)
+	iface, err := water.New(tunConfig)
 	if err != nil {
 		logrus.Fatal("CreateTUNChannel failed: ", err)
 	}
 
-	return ifce
+	return iface
+}
+
+func CloseTUNChannel(iface *water.Interface) {
+	water
 }
 
 // NewTcpStatusServer 每个httpserver前置一个tcp转发服务，用以控制 FIN/RST 等状态
 func NewTcpStatusServer(port int) error {
+
 	return nil
 }
