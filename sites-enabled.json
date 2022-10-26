@@ -1,0 +1,38 @@
+{
+  "global": {
+    "rst_conn": 40,
+    "reuseport": true,
+    "tun_channel_cidr": "172.16.3.0/25"
+  },
+  "servers": [
+    {
+      "server": {
+        "type": "http",
+        "host_name": "www.sxueck.com",
+        "listen_port": 80,
+        "location": [
+          {
+            "backend": {
+              "by_pass": "https://www.sxueck.com"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": {
+        "type": "grpc",
+        "host_name": "_",
+        "listen_port": 80,
+        "location": [
+          {
+            "backend": {
+              "method": "/baichuan.proto.api.al.common.EntityConfigurationService",
+              "by_pass": "grpc://127.0.0.1:6911"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

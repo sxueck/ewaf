@@ -26,7 +26,7 @@ func CreateTUNChannel() *water.Interface {
 }
 
 func CloseTUNChannel(iface *water.Interface) {
-	water
+
 }
 
 // NewTcpStatusServer 每个httpserver前置一个tcp转发服务，用以控制 FIN/RST 等状态

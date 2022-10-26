@@ -1,19 +1,30 @@
 package main
 
 import (
-	"github.com/sxueck/ewaf/pkg/server"
-	"log"
+	"github.com/sirupsen/logrus"
+	"github.com/sxueck/ewaf/proxy"
+	"github.com/sxueck/ewaf/proxy/grpc"
+	"golang.org/x/net/context"
 )
 
 func main() {
-	var safePort = 8080
-	var injectionServer = server.FrontendServer{}
-	err := injectionServer.Start(server.Server{
-		Name: "test",
-		IP:   "127.0.0.1",
-		Port: uint8(safePort),
-	})
-	if err != nil {
-		log.Fatal(err)
+	//cfg := config.Cfg
+
+	// global channel context
+	ctx, _ := context.WithCancel(context.Background())
+
+	// start internal proxy interfaces
+	for _, f := range []proxy.StartServ{
+		&grpc.ServerOptions{} /*, &http.ServerOptions{}, &tcp.ServerOptions{}*/} {
+		go func(f proxy.StartServ) {
+			f.WithContext(ctx)
+			err := f.Start()
+			if err != nil {
+				logrus.Printf("fatal start internal server : %s", err)
+				return
+			}
+		}(f)
 	}
+
+	<-ctx.Done()
 }

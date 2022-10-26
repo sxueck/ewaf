@@ -15,14 +15,7 @@ type Server struct {
 	IP        string
 }
 
-type StartServ interface {
-	Start(Server) error // 承接请求
-	Stop()              // 停止访问，优雅退出
-	Serve() error       // 业务模块
-}
-
 type FrontendServer struct {
-	StartServ
 }
 
 func (fs *FrontendServer) Start(s Server) error {

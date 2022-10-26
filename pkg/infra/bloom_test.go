@@ -4,13 +4,13 @@ import (
 	"testing"
 )
 
-func BenchmarkRepeat(b *testing.B) { // 0.2149 ns/op
+func BenchmarkRepeat(b *testing.B) { // 0.2149 ns/op - 11900K
 	for i := 0; i < b.N; i++ {
 		Repeat(i)
 	}
 }
 
-func BenchmarkRepeat2(b *testing.B) { // 0.2131 ns/op
+func BenchmarkRepeat2(b *testing.B) { // 0.2131 ns/op - 11900K
 	for i := 0; i < b.N; i++ {
 		Repeat2(i)
 	}
