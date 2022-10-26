@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/anypb"
 	"io"
 )
 
@@ -44,7 +45,6 @@ func TransparentHandler(director StreamDirector) grpc.StreamHandler {
 	streamer := &handler{
 		director: director,
 	}
-
 	return streamer.handler
 }
 
@@ -105,9 +105,49 @@ func (h *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 }
 
 func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerStream) chan error {
-	return nil
+	ret := make(chan error, 1)
+	go func() {
+		f := &anypb.Any{}
+		for i := 0; ; i++ {
+			if err := src.RecvMsg(f); err != nil {
+				ret <- err
+				break
+			}
+
+			// this is a bit of a hack, but client to server headers are only readable after first client msg is
+			// received but must be written to server stream before the first msg is flushed.
+			if i == 0 {
+				md, err := src.Header()
+				if err != nil {
+					ret <- err
+					break
+				}
+				if err := dst.SendHeader(md); err != nil {
+					ret <- err
+					break
+				}
+			}
+
+			if err := dst.SendMsg(f); err != nil {
+				ret <- err
+				break
+			}
+		}
+	}()
+
+	return ret
 }
 
-func (h *handler) forwardServerToClient(dst grpc.ServerStream, src grpc.ClientStream) chan error {
-	return nil
+func (h *handler) forwardServerToClient(src grpc.ServerStream, dst grpc.ClientStream) chan error {
+	ret := make(chan error, 1)
+	go func() {
+		f := &anypb.Any{}
+		for i := 0; ; i++ {
+			if err := src.RecvMsg(f); err != nil {
+				ret <- err
+				break
+			}
+		}
+	}()
+	return ret
 }
