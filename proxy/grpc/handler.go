@@ -4,8 +4,8 @@ import (
 	"context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/anypb"
 	"io"
 )
@@ -25,7 +25,7 @@ func (gso *ServerOptions) WithContext(ctx context.Context) {
 }
 
 func (gso *ServerOptions) Start() error {
-	pBc := bufconn.Listen(10)
+	//pBc := bufconn.Listen(10)
 
 	// create a client connection to this backend
 	//cc, err := backend
@@ -45,6 +45,7 @@ func TransparentHandler(director StreamDirector) grpc.StreamHandler {
 	streamer := &handler{
 		director: director,
 	}
+
 	return streamer.handler
 }
 
@@ -65,6 +66,12 @@ func (h *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 		ClientStreams: true,
 		ServerStreams: true,
 	}
+
+	incomingMD, ok := metadata.FromIncomingContext(clientCtx)
+	if ok {
+		clientCtx = metadata.NewOutgoingContext(clientCtx, incomingMD)
+	}
+
 	clientStream, err := grpc.NewClientStream(clientCtx, &globalStreamDesc, backendConn, methods)
 	if err != nil {
 		return err
@@ -113,10 +120,9 @@ func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerSt
 				ret <- err
 				break
 			}
-
-			// this is a bit of a hack, but client to server headers are only readable after first client msg is
-			// received but must be written to server stream before the first msg is flushed.
 			if i == 0 {
+				// this is a bit of a hack, but client to server headers are only readable after first client msg is
+				// received but must be written to server stream before the first msg is flushed.
 				md, err := src.Header()
 				if err != nil {
 					ret <- err
@@ -127,14 +133,12 @@ func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerSt
 					break
 				}
 			}
-
 			if err := dst.SendMsg(f); err != nil {
 				ret <- err
 				break
 			}
 		}
 	}()
-
 	return ret
 }
 
@@ -144,10 +148,15 @@ func (h *handler) forwardServerToClient(src grpc.ServerStream, dst grpc.ClientSt
 		f := &anypb.Any{}
 		for i := 0; ; i++ {
 			if err := src.RecvMsg(f); err != nil {
+				ret <- err // this can be io.EOF which is happy case
+				break
+			}
+			if err := dst.SendMsg(f); err != nil {
 				ret <- err
 				break
 			}
 		}
 	}()
+
 	return ret
 }
