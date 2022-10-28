@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-var Cfg = &cfg{}
+var ECfg = &Cfg{}
 
 func init() {
 	v := viper.New()
@@ -18,7 +18,7 @@ func init() {
 		log.Fatalf("fatal error config file: %s", err)
 	}
 
-	if err := v.Unmarshal(Cfg); err != nil {
+	if err := v.Unmarshal(ECfg); err != nil {
 		log.Fatalf("unmarshal configuration to model error : %s", err)
 	}
 }
