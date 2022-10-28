@@ -2,11 +2,14 @@ package grpc
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
+	"github.com/sxueck/ewaf/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 )
 
@@ -25,10 +28,25 @@ func (gso *ServerOptions) WithContext(ctx context.Context) {
 }
 
 func (gso *ServerOptions) Start() error {
-	//pBc := bufconn.Listen(10)
+	pBc := bufconn.Listen(10)
 
 	// create a client connection to this backend
-	//cc, err := backend
+	gs := grpc.NewServer()
+	GeneratorMethodsTree(gs, *config.ECfg)
+
+	go func() {
+		logrus.Println("grpc server started")
+		if err := gs.Serve(pBc); err != nil {
+			if err == grpc.ErrServerStopped {
+				logrus.Println("server stopped")
+				return
+			}
+		}
+	}()
+
+	defer func() {
+		gs.GracefulStop()
+	}()
 
 	return nil
 }
@@ -114,7 +132,7 @@ func (h *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerStream) chan error {
 	ret := make(chan error, 1)
 	go func() {
-		f := &anypb.Any{}
+		f := &emptypb.Empty{}
 		for i := 0; ; i++ {
 			if err := src.RecvMsg(f); err != nil {
 				ret <- err
@@ -128,7 +146,7 @@ func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerSt
 					ret <- err
 					break
 				}
-				if err := dst.SendHeader(md); err != nil {
+				if err = dst.SendHeader(md); err != nil {
 					ret <- err
 					break
 				}
@@ -145,10 +163,10 @@ func (h *handler) forwardClientToServer(src grpc.ClientStream, dst grpc.ServerSt
 func (h *handler) forwardServerToClient(src grpc.ServerStream, dst grpc.ClientStream) chan error {
 	ret := make(chan error, 1)
 	go func() {
-		f := &anypb.Any{}
+		f := &emptypb.Empty{}
 		for i := 0; ; i++ {
 			if err := src.RecvMsg(f); err != nil {
-				ret <- err // this can be io.EOF which is happy case
+				ret <- err
 				break
 			}
 			if err := dst.SendMsg(f); err != nil {

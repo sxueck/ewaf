@@ -6,7 +6,7 @@
   },
   "servers": [
     {
-      "server": {
+      "frontend": {
         "type": "http",
         "host_name": "www.sxueck.com",
         "listen_port": 80,
@@ -20,15 +20,15 @@
       }
     },
     {
-      "server": {
+      "frontend": {
         "type": "grpc",
         "host_name": "_",
         "listen_port": 80,
         "location": [
           {
             "backend": {
-              "method": "/baichuan.proto.api.al.common.EntityConfigurationService",
-              "by_pass": "grpc://127.0.0.1:6911"
+              "method": "/mwitkow.testproto.TestService.Ping",
+              "by_pass": "grpc://127.0.0.1:8080"
             }
           }
         ]
