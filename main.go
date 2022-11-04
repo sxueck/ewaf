@@ -23,6 +23,14 @@ func main() {
 				logrus.Printf("fatal start internal server : %s", err)
 				return
 			}
+
+			logrus.Println("start internal grpc serve module")
+
+			err = f.Serve()
+			if err != nil {
+				logrus.Printf("fatal start internal server : %s", err)
+				return
+			}
 		}(f)
 	}
 

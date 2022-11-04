@@ -8,9 +8,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
+	"net"
 )
 
 // codec => stream director => stream handler => balancer
@@ -21,6 +21,8 @@ type handler struct {
 
 type ServerOptions struct {
 	ctx context.Context
+
+	gs *grpc.Server
 }
 
 func (gso *ServerOptions) WithContext(ctx context.Context) {
@@ -28,34 +30,47 @@ func (gso *ServerOptions) WithContext(ctx context.Context) {
 }
 
 func (gso *ServerOptions) Start() error {
-	pBc := bufconn.Listen(10)
+	cc, err := backendDialer(grpc.WithDefaultCallOptions(grpc.ForceCodec(Codec())))
+	if err != nil {
+		logrus.Fatalf("failed to start backend : %s", err)
+	}
 
 	// create a client connection to this backend
-	gs := grpc.NewServer()
-	GeneratorMethodsTree(gs, *config.ECfg)
 
-	go func() {
-		logrus.Println("grpc server started")
-		if err := gs.Serve(pBc); err != nil {
-			if err == grpc.ErrServerStopped {
-				logrus.Println("server stopped")
-				return
-			}
-		}
-	}()
+	directorFn := func(ctx context.Context, fullMethodName string) (context.Context, *grpc.ClientConn) {
+		md, _ := metadata.FromIncomingContext(ctx)
+		outCtx := metadata.NewOutgoingContext(ctx, md.Copy())
+		return outCtx, cc
+	}
 
-	defer func() {
-		gs.GracefulStop()
-	}()
+	proxySrv := grpc.NewServer(
+		grpc.ForceServerCodec(Codec()),
+		grpc.UnknownServiceHandler(TransparentHandler(directorFn)),
+	)
+
+	gso.gs = proxySrv
 
 	return nil
 }
 
 func (gso *ServerOptions) Stop() {
-
+	gso.gs.GracefulStop()
 }
 
 func (gso *ServerOptions) Serve() error {
+	ln, err := net.Listen("tcp", ":8000")
+	if err != nil {
+		logrus.Fatalf("%s", err)
+	}
+	GeneratorMethodsTree(gso.gs, *config.ECfg)
+
+	if err = gso.gs.Serve(ln); err != nil {
+		if err == grpc.ErrServerStopped {
+			logrus.Printf("grpc server stopped")
+		}
+		logrus.Printf("running proxy server: %v", err)
+	}
+
 	return nil
 }
 

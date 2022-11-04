@@ -11,6 +11,7 @@ type Global struct {
 	RstConn        int    `json:"rst_conn"`
 	Reuseport      bool   `json:"reuseport"`
 	TunChannelCidr string `json:"tun_channel_cidr"`
+	TcpManagement  string `json:"tcp_management"`
 }
 
 type Backend struct {
