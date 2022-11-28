@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"net"
+	"strings"
 )
 
 // codec => stream director => stream handler => balancer
@@ -30,27 +31,7 @@ func (gso *ServerOptions) WithContext(ctx context.Context) {
 }
 
 func (gso *ServerOptions) Start() error {
-	cc, err := backendDialer(grpc.WithDefaultCallOptions(grpc.ForceCodec(Codec())))
-	if err != nil {
-		logrus.Fatalf("failed to start backend : %s", err)
-	}
 
-	// create a client connection to this backend
-
-	directorFn := func(ctx context.Context, fullMethodName string) (context.Context, *grpc.ClientConn) {
-		md, _ := metadata.FromIncomingContext(ctx)
-		outCtx := metadata.NewOutgoingContext(ctx, md.Copy())
-		return outCtx, cc
-	}
-
-	proxySrv := grpc.NewServer(
-		grpc.ForceServerCodec(Codec()),
-		grpc.UnknownServiceHandler(TransparentHandler(directorFn)),
-	)
-
-	gso.gs = proxySrv
-
-	return nil
 }
 
 func (gso *ServerOptions) Stop() {
@@ -58,21 +39,9 @@ func (gso *ServerOptions) Stop() {
 }
 
 func (gso *ServerOptions) Serve() error {
-	ln, err := net.Listen("tcp", ":8000")
-	if err != nil {
-		logrus.Fatalf("%s", err)
-	}
-	GeneratorMethodsTree(gso.gs, *config.ECfg)
 
-	if err = gso.gs.Serve(ln); err != nil {
-		if err == grpc.ErrServerStopped {
-			logrus.Printf("grpc server stopped")
-		}
-		logrus.Printf("running proxy server: %v", err)
-	}
-
-	return nil
 }
+
 
 func TransparentHandler(director StreamDirector) grpc.StreamHandler {
 	streamer := &handler{
