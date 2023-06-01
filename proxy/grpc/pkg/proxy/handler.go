@@ -2,16 +2,12 @@ package grpc
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
-	"github.com/sxueck/ewaf/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
-	"net"
-	"strings"
 )
 
 // codec => stream director => stream handler => balancer
@@ -31,7 +27,7 @@ func (gso *ServerOptions) WithContext(ctx context.Context) {
 }
 
 func (gso *ServerOptions) Start() error {
-
+	return nil
 }
 
 func (gso *ServerOptions) Stop() {
@@ -39,9 +35,8 @@ func (gso *ServerOptions) Stop() {
 }
 
 func (gso *ServerOptions) Serve() error {
-
+	return nil
 }
-
 
 func TransparentHandler(director StreamDirector) grpc.StreamHandler {
 	streamer := &handler{

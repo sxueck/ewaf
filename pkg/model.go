@@ -1,10 +1,10 @@
-package config
+package pkg
 
 // generator-url: https://mholt.github.io/json-to-go/
 
-type Cfg struct {
-	Global  Global   `json:"global"`
-	Servers []Server `json:"servers"`
+type GlobalConfig struct {
+	Global  Global    `json:"global"`
+	Servers *[]Server `json:"servers"`
 }
 
 type Global struct {
@@ -14,6 +14,17 @@ type Global struct {
 	TcpManagement  string `json:"tcp_management"`
 }
 
+type Frontend struct {
+	Type       string      `json:"type"`
+	HostName   string      `json:"host_name"`
+	ListenPort int         `json:"listen_port"`
+	Location   *[]Location `json:"location"`
+}
+
+type Server struct {
+	Frontend Frontend `json:"frontend"`
+}
+
 type Backend struct {
 	Method string `json:"method"`
 	ByPass string `json:"by_pass"`
@@ -21,15 +32,4 @@ type Backend struct {
 
 type Location struct {
 	Backend Backend `json:"backend"`
-}
-
-type Frontend struct {
-	Type       string     `json:"type"`
-	HostName   string     `json:"host_name"`
-	ListenPort int        `json:"listen_port"`
-	Location   []Location `json:"location"`
-}
-
-type Server struct {
-	Frontend Frontend `json:"frontend"`
 }

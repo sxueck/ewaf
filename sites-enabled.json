@@ -22,6 +22,20 @@
     },
     {
       "frontend": {
+        "type": "tcp",
+        "host_name": "_",
+        "listen_port": 80,
+        "location": [
+          {
+            "backend": {
+              "by_pass": "www.baidu.com:80"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "frontend": {
         "type": "grpc",
         "host_name": "_",
         "listen_port": 80,

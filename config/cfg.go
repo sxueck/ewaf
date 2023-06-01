@@ -5,9 +5,7 @@ import (
 	"log"
 )
 
-var ECfg = &Cfg{}
-
-func init() {
+func InitParse(inf any) any {
 	v := viper.New()
 	v.SetConfigName("sites-enabled")
 	v.SetConfigType("json")
@@ -18,7 +16,10 @@ func init() {
 		log.Fatalf("fatal error config file: %s", err)
 	}
 
-	if err := v.Unmarshal(ECfg); err != nil {
+	if err := v.Unmarshal(inf); err != nil {
 		log.Fatalf("unmarshal configuration to model error : %s", err)
 	}
+
+	log.Println(inf)
+	return inf
 }
