@@ -86,7 +86,7 @@ func handleClient(client net.Conn, targetAddr string) {
 	targetWriter := bufio.NewWriter(target)
 
 	go func() {
-		_, err := io.Copy(targetWriter, reader)
+		_, err = io.Copy(targetWriter, reader)
 		if err != nil {
 			log.Printf("Error while copying client to target: %v", err)
 		}

@@ -34,3 +34,7 @@ func NewTcpStatusServer(port int) error {
 
 	return nil
 }
+
+func TCPExceptionCheck() bool {
+	return true
+}

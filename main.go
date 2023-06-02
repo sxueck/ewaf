@@ -12,7 +12,6 @@ import (
 
 func main() {
 	cfg := config.InitParse(&pkg.GlobalConfig{})
-
 	// global channel context
 	ctx, _ := context.WithCancel(context.Background())
 
