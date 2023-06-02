@@ -3,22 +3,22 @@ package pkg
 // generator-url: https://mholt.github.io/json-to-go/
 
 type GlobalConfig struct {
-	Global  Global    `json:"global"`
-	Servers *[]Server `json:"servers"`
+	Global  Global   `json:"global"`
+	Servers []Server `json:"servers"`
 }
 
 type Global struct {
-	RstConn        int    `json:"rst_conn"`
+	RstConn        int    `json:"rst_conn" mapstructure:"rst_conn"`
 	Reuseport      bool   `json:"reuseport"`
-	TunChannelCidr string `json:"tun_channel_cidr"`
-	TcpManagement  string `json:"tcp_management"`
+	TunChannelCidr string `json:"tun_channel_cidr" mapstructure:"tun_channel_cidr"`
+	TcpManagement  string `json:"tcp_management" mapstructure:"tcp_management"`
 }
 
 type Frontend struct {
-	Type       string      `json:"type"`
-	HostName   string      `json:"host_name"`
-	ListenPort int         `json:"listen_port"`
-	Location   *[]Location `json:"location"`
+	Type       string     `json:"type"`
+	HostName   string     `json:"host_name" mapstructure:"host_name"`
+	ListenPort int        `json:"listen_port" mapstructure:"listen_port"`
+	Location   []Location `json:"location"`
 }
 
 type Server struct {
@@ -27,7 +27,7 @@ type Server struct {
 
 type Backend struct {
 	Method string `json:"method"`
-	ByPass string `json:"by_pass"`
+	ByPass string `json:"by_pass" mapstructure:"by_pass"`
 }
 
 type Location struct {

@@ -20,6 +20,5 @@ func InitParse(inf any) any {
 		log.Fatalf("unmarshal configuration to model error : %s", err)
 	}
 
-	log.Println(inf)
 	return inf
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/sxueck/ewaf/proxy"
 	"github.com/sxueck/ewaf/proxy/tcp"
 	"golang.org/x/net/context"
+	"reflect"
 )
 
 func main() {
@@ -20,13 +21,13 @@ func main() {
 		&tcp.ServerOptions{FrMark: "tcp"}} {
 		go func(f proxy.StartServ) {
 			f.WithContext(ctx, cfg.(*pkg.GlobalConfig))
-			err := f.Start()
-			if err != nil {
-				logrus.Printf("fatal start internal server : %s", err)
+			out := f.Start()
+			if rt := reflect.TypeOf(out); rt.Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+				logrus.Printf("fatal start internal server : %s", out)
 				return
 			}
 
-			err = f.Serve()
+			err := f.Serve(out)
 			if err != nil {
 				logrus.Printf("fatal start internal server : %s", err)
 				return

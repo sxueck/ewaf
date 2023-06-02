@@ -10,7 +10,7 @@
       "frontend": {
         "type": "http",
         "host_name": "www.sxueck.com",
-        "listen_port": 80,
+        "listen_port": 8088,
         "location": [
           {
             "backend": {
@@ -24,26 +24,11 @@
       "frontend": {
         "type": "tcp",
         "host_name": "_",
-        "listen_port": 80,
+        "listen_port": 8089,
         "location": [
           {
             "backend": {
-              "by_pass": "www.baidu.com:80"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "frontend": {
-        "type": "grpc",
-        "host_name": "_",
-        "listen_port": 80,
-        "location": [
-          {
-            "backend": {
-              "method": "/mwitkow.testproto.TestService.Ping",
-              "by_pass": "grpc://127.0.0.1:8080"
+              "by_pass": "10.10.3.199:22"
             }
           }
         ]

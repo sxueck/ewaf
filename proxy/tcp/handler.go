@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/sxueck/ewaf/pkg"
@@ -8,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
+	"time"
 )
 
 type ServerOptions struct {
@@ -21,13 +24,23 @@ func (gso *ServerOptions) WithContext(ctx context.Context, cfg *pkg.GlobalConfig
 	gso.cfg = cfg
 }
 
-func (gso *ServerOptions) Start() error {
-	tcpFrs := proxy.CheckTheSurvivalOfUpstreamServices(*gso.cfg.Servers, gso.FrMark)
+func (gso *ServerOptions) Start() any {
+	tcpFrs := proxy.CheckTheSurvivalOfUpstreamServices(gso.cfg.Servers, gso.FrMark)
+	return tcpFrs
+}
 
-	log.Printf("%+v\n", tcpFrs)
-	for _, v := range tcpFrs {
+func (gso *ServerOptions) Stop() {
+
+}
+
+func (gso *ServerOptions) Serve(in any) error {
+	var wg = &sync.WaitGroup{}
+	for _, v := range in.([]pkg.Frontend) {
 		cv := v
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+			log.Printf("create a new connection tcp channel :%d => %s", cv.ListenPort, (cv.Location)[0].Backend.ByPass)
 			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cv.ListenPort))
 			if err != nil {
 				log.Fatalf("Failed to start listener: %v", err)
@@ -40,42 +53,49 @@ func (gso *ServerOptions) Start() error {
 					continue
 				}
 
-				go handleClient(client, (*cv.Location)[0].Backend.ByPass)
+				go handleClient(client, (cv.Location)[0].Backend.ByPass)
 			}
 		}()
 	}
 
-	return nil
-}
-
-func (gso *ServerOptions) Stop() {
-
-}
-
-func (gso *ServerOptions) Serve() error {
+	wg.Wait()
 	return nil
 }
 
 func handleClient(client net.Conn, targetAddr string) {
 	target, err := net.Dial("tcp", targetAddr)
+	defer func() {
+		client.Close()
+		target.Close()
+	}()
+
+	tcpConn, ok := target.(*net.TCPConn)
+	if ok {
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(3 * time.Minute)
+	}
+
 	if err != nil {
 		log.Printf("Failed to connect to target: %v", err)
-		client.Close()
 		return
 	}
 
+	reader := bufio.NewReader(client)
+	writer := bufio.NewWriter(client)
+	targetReader := bufio.NewReader(target)
+	targetWriter := bufio.NewWriter(target)
+
 	go func() {
-		_, err := io.Copy(target, client)
+		_, err := io.Copy(targetWriter, reader)
 		if err != nil {
 			log.Printf("Error while copying client to target: %v", err)
 		}
+		_ = targetWriter.Flush()
 	}()
 
-	_, err = io.Copy(client, target)
+	_, err = io.Copy(writer, targetReader)
 	if err != nil {
 		log.Printf("Error while copying target to client: %v", err)
 	}
-
-	client.Close()
-	target.Close()
+	_ = writer.Flush()
 }

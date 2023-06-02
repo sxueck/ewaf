@@ -9,7 +9,7 @@ TODO
 * 支持 User-Agent 的过滤访问
 * 日志转储至 ElasticsSearch
 * 良好的 Metrics 监控 WAF 本身状态
-* 反向代理 (TCP / Grpc / HTTP)
+* 反向代理 (TCP / HTTP)
 * 阻断常见的 SQL 注入攻击
 * 阻断常见的 XSS 注入攻击
 * 简易临时操作面板
