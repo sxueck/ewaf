@@ -7,14 +7,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spaolacci/murmur3"
+	"log"
 	"net"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
 // State 表示 TCP 连接状态
 type State int
+
+const NextStatusInterval = 2
 
 const (
 	// StateUnknown 表示未知状态
@@ -79,38 +83,32 @@ func StateString(state State) string {
 	}
 }
 
-// Stat 表示 TCP 连接状态和计数器
 type Stat struct {
 	State State // TCP 连接状态
 	Count int   // 计数器
 }
 
-// TCPStatMap 表示带有状态计数器的 TCP 连接状态哈希表
-type TCPStatMap struct {
+type StatMap struct {
 	sync.RWMutex
 	m map[uint64]Stat // 哈希表
 }
 
-// NewTCPStatMap 返回一个新的 TCPStatMap 对象
-func NewTCPStatMap() *TCPStatMap {
-	return &TCPStatMap{
+func NewTCPStatMap() *StatMap {
+	return &StatMap{
 		m: make(map[uint64]Stat),
 	}
 }
 
 // Add 添加一个 TCP 连接状态
-func (m *TCPStatMap) Add(remoteAddr, localAddr *net.TCPAddr, state State) {
-	// 将 remoteAddr 和 localAddr 拼接成一个字符串，并计算哈希值
+// 在哈希表中，TCP连接状态同时只能有一条，注意这里使用了五元组进行单一连接的判定
+func (m *StatMap) Add(remoteAddr, localAddr *net.TCPAddr, state State) {
 	key := hashRemoteLocalAddr(remoteAddr, localAddr)
 
-	// 获取写锁
 	m.Lock()
 	defer m.Unlock()
 
-	// 查找哈希表中是否存在对应的 key
 	stat, ok := m.m[key]
 	if !ok {
-		// 如果不存在，则新增一个 key
 		stat = Stat{State: state, Count: 1}
 	} else {
 		stat.State = state
@@ -122,21 +120,17 @@ func (m *TCPStatMap) Add(remoteAddr, localAddr *net.TCPAddr, state State) {
 }
 
 // Remove 删除一个 TCP 连接状态
-func (m *TCPStatMap) Remove(remoteAddr, localAddr *net.TCPAddr) {
-	// 将 remoteAddr 和 localAddr 拼接成一个字符串，并计算哈希值
+func (m *StatMap) Remove(remoteAddr, localAddr *net.TCPAddr) {
 	key := hashRemoteLocalAddr(remoteAddr, localAddr)
 
-	// 获取写锁
 	m.Lock()
 	defer m.Unlock()
 
-	// 从哈希表中删除对应的 key
 	delete(m.m, key)
 }
 
 // Count 返回指定状态的连接数
-func (m *TCPStatMap) Count(state State) int {
-	// 获取读锁
+func (m *StatMap) Count(state State) int {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -150,7 +144,6 @@ func (m *TCPStatMap) Count(state State) int {
 	return count
 }
 
-// hashRemoteLocalAddr 将 remoteAddr 和 localAddr 拼接成一个字符串，并计算哈希值
 func hashRemoteLocalAddr(remoteAddr, localAddr *net.TCPAddr) uint64 {
 	s := fmt.Sprintf("%s:%d-%s:%d", remoteAddr.IP.String(), remoteAddr.Port, localAddr.IP.String(), localAddr.Port)
 	h := murmur3.New64()
@@ -175,12 +168,12 @@ func getSockOpt(fd uintptr, level, name int, val unsafe.Pointer, vallen *uintptr
 	return nil
 }
 
-// getTCPState 获取 TCP 连接的状态
+// GetTCPState 获取 TCP 连接的状态
 // 获取 TCP 连接的状态
-func getTCPState(conn *net.TCPConn) (State, error) {
+func GetTCPState(conn *net.TCPConn, statMap *StatMap) error {
 	f, err := conn.File()
 	if err != nil {
-		return StateUnknown, err
+		return err
 	}
 	// 获取 TCP 连接的本地地址和远程地址
 	localAddr := conn.LocalAddr().(*net.TCPAddr)
@@ -192,14 +185,28 @@ func getTCPState(conn *net.TCPConn) (State, error) {
 	vallen := uintptr(4) // 创建一个 uintptr 类型的变量来存储 vallen 的值
 	err = getSockOpt(f.Fd(), syscall.IPPROTO_TCP, syscall.TCP_INFO, unsafe.Pointer(&buf[0]), &vallen)
 	if err != nil {
-		return StateUnknown, err
+		return err
 	}
 	state = binary.LittleEndian.Uint32(buf)
 
 	// 将获取到的状态添加到 TCPStatMap
-	statMap := NewTCPStatMap()
 	statMap.Add(remoteAddr, localAddr, State(state))
-	defer statMap.Remove(remoteAddr, localAddr)
 
-	return State(state), nil
+	n := statMap.m[hashRemoteLocalAddr(remoteAddr, localAddr)].State
+	if n == StateUnknown || n == StateClosed || n == StateClosing {
+		statMap.Remove(remoteAddr, localAddr)
+	}
+
+	return nil
+}
+
+func ContinuousGetTCPState(conn *net.Conn, statMap *StatMap) {
+	for {
+		err := GetTCPState((*conn).(*net.TCPConn), statMap)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		<-time.NewTicker(time.Second * time.Duration(NextStatusInterval)).C
+	}
 }

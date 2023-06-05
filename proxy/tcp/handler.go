@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
 	"github.com/sxueck/ewaf/proxy"
 	"io"
@@ -34,13 +35,18 @@ func (gso *ServerOptions) Stop() {
 }
 
 func (gso *ServerOptions) Serve(in any) error {
+	statMap := NewTCPStatMap()
 	var wg = &sync.WaitGroup{}
+
 	for _, v := range in.([]pkg.Frontend) {
 		cv := v
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			log.Printf("create a new connection tcp channel :%d => %s", cv.ListenPort, (cv.Location)[0].Backend.ByPass)
+			log.Printf("create a new connection tcp channel :%d => %s",
+				cv.ListenPort, (cv.Location)[0].Backend.ByPass,
+			)
+
 			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cv.ListenPort))
 			if err != nil {
 				log.Fatalf("Failed to start listener: %v", err)
@@ -53,6 +59,7 @@ func (gso *ServerOptions) Serve(in any) error {
 					continue
 				}
 
+				go ContinuousGetTCPState(&client, statMap)
 				go handleClient(client, (cv.Location)[0].Backend.ByPass)
 			}
 		}()
@@ -68,6 +75,11 @@ func handleClient(client net.Conn, targetAddr string) {
 		client.Close()
 		target.Close()
 	}()
+
+	if client.LocalAddr().String() == client.RemoteAddr().String() {
+		logrus.Warn("Land Attack detected!")
+		return
+	}
 
 	tcpConn, ok := target.(*net.TCPConn)
 	if ok {

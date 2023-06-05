@@ -11,7 +11,7 @@ type Global struct {
 	RstConn        int    `json:"rst_conn" mapstructure:"rst_conn"`
 	Reuseport      bool   `json:"reuseport"`
 	TunChannelCidr string `json:"tun_channel_cidr" mapstructure:"tun_channel_cidr"`
-	TcpManagement  string `json:"tcp_management" mapstructure:"tcp_management"`
+	TCPManagement  string `json:"tcp_management" mapstructure:"tcp_management"`
 }
 
 type Frontend struct {
