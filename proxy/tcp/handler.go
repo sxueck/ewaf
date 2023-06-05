@@ -3,13 +3,13 @@ package tcp
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
 	"github.com/sxueck/ewaf/proxy"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -47,11 +47,8 @@ func (gso *ServerOptions) Serve(in any) error {
 				cv.ListenPort, (cv.Location)[0].Backend.ByPass,
 			)
 
-			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cv.ListenPort))
-			if err != nil {
-				log.Fatalf("Failed to start listener: %v", err)
-			}
-
+			lis := &CustomRule{}
+			lis.IPAddr = net.JoinHostPort(net.IPv4zero.String(), strconv.Itoa(cv.ListenPort))
 			for {
 				client, err := lis.Accept()
 				if err != nil {
