@@ -44,7 +44,7 @@ func (gso *ServerOptions) Start() any {
 		for {
 			<-ticker.C
 			gso.bloom.Reset()
-			LoadDenyIPRules(gso, []string{"127.0.0.1"})
+			LoadDenyIPRules(gso, nil)
 			ticker.Reset(NextStatusInterval * time.Second)
 		}
 	}()
@@ -90,6 +90,7 @@ func (gso *ServerOptions) Serve(in any) error {
 					log.Printf("Failed to accept connection: %v", err)
 					continue
 				}
+				log.Println("new client:", client.RemoteAddr().String())
 
 				if gso.bloom.KeySize() > 0 {
 					dip := client.RemoteAddr().String()
@@ -163,7 +164,7 @@ func handleClient(cancel context.CancelFunc, client *net.Conn, targetAddr string
 }
 
 func (gso *ServerOptions) CaptureTCPPacketFiltering(
-	port int, opts ...func(*gopacket.PacketSource, *ServerOptions)) {
+	port int, opts ...func(<-chan gopacket.Packet, *ServerOptions)) {
 
 	h, err := pcap.OpenLive(
 		gso.cfg.Global.Interface,
@@ -184,7 +185,10 @@ func (gso *ServerOptions) CaptureTCPPacketFiltering(
 	}
 
 	pktSource := gopacket.NewPacketSource(h, h.LinkType())
-	for _, v := range opts {
-		go v(pktSource, gso)
+	for p := range pktSource.Packets() {
+		logrus.Info(p.String())
 	}
+	//for _, v := range opts {
+	//	go v(pktSource.Packets(), gso)
+	//}
 }

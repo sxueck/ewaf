@@ -92,23 +92,28 @@ func LoadDenyIPRules(gso *ServerOptions, ips []string) {
 // 对于大量SYN_RECV状态的缓解
 
 // WithTCPServerSYNACKRecv 对于服务端接受到异常握手包的拦截
-func WithTCPServerSYNACKRecv(p *gopacket.PacketSource, gso *ServerOptions) {
-	for packet := range p.Packets() {
-		ipLayer := packet.Layer(layers.LayerTypeIPv4)
-		if ipLayer == nil {
-			continue
-		}
+func WithTCPServerSYNACKRecv(p <-chan gopacket.Packet, gso *ServerOptions) {
+	for {
+		select {
+		case packet := <-p:
+			logrus.Warn("SYN ACK Recv: ", packet.String())
+			ipLayer := packet.Layer(layers.LayerTypeIPv4)
+			if ipLayer == nil {
+				continue
+			}
 
-		ip, _ := ipLayer.(*layers.IPv4)
-		tcpLayer := packet.Layer(layers.LayerTypeTCP)
-		if tcpLayer == nil {
-			continue
-		}
+			ip, _ := ipLayer.(*layers.IPv4)
+			logrus.Println(ip.SrcIP.String())
+			tcpLayer := packet.Layer(layers.LayerTypeTCP)
+			if tcpLayer == nil {
+				continue
+			}
 
-		tcp, _ := tcpLayer.(*layers.TCP)
-		if tcp.SYN && tcp.ACK {
-			logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
-			gso.bloom.AddString(ip.SrcIP.String())
+			tcp, _ := tcpLayer.(*layers.TCP)
+			if tcp.SYN && tcp.ACK {
+				logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
+				gso.bloom.AddString(ip.SrcIP.String())
+			}
 		}
 	}
 }
