@@ -4,6 +4,7 @@ package tcp
 // 以便快速判断是否需要拦截或是进行收敛
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"github.com/spaolacci/murmur3"
@@ -145,7 +146,8 @@ func (m *StatMap) Count(state State) int {
 }
 
 func hashRemoteLocalAddr(remoteAddr, localAddr *net.TCPAddr) uint64 {
-	s := fmt.Sprintf("%s:%d-%s:%d", remoteAddr.IP.String(), remoteAddr.Port, localAddr.IP.String(), localAddr.Port)
+	s := fmt.Sprintf("%s:%d-%s:%d",
+		remoteAddr.IP.String(), remoteAddr.Port, localAddr.IP.String(), localAddr.Port)
 	h := murmur3.New64()
 	h.Write([]byte(s))
 	return h.Sum64()
@@ -200,13 +202,17 @@ func GetTCPState(conn *net.TCPConn, statMap *StatMap) error {
 	return nil
 }
 
-func ContinuousGetTCPState(conn *net.Conn, statMap *StatMap) {
+func ContinuousGetTCPState(ctx context.Context, conn *net.Conn, statMap *StatMap) {
 	for {
-		err := GetTCPState((*conn).(*net.TCPConn), statMap)
-		if err != nil {
-			log.Println(err)
+		select {
+		case <-ctx.Done():
 			return
+		case <-time.NewTicker(time.Second * time.Duration(NextStatusInterval)).C:
+			err := GetTCPState((*conn).(*net.TCPConn), statMap)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
-		<-time.NewTicker(time.Second * time.Duration(NextStatusInterval)).C
 	}
 }

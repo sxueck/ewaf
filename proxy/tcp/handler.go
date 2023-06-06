@@ -3,9 +3,13 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"fmt"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
 	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
 	"github.com/sxueck/ewaf/proxy"
+
 	"io"
 	"log"
 	"net"
@@ -49,15 +53,28 @@ func (gso *ServerOptions) Serve(in any) error {
 
 			lis := &CustomRule{}
 			lis.IPAddr = net.JoinHostPort(net.IPv4zero.String(), strconv.Itoa(cv.ListenPort))
+
+			err := lis.Listen()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			go gso.CaptureTCPPacketFiltering(cv.ListenPort,
+				WithTCPServerSYNACKRecv,
+			)
+
 			for {
+				// 如果不做限制，会出现重复使用已关闭连接的错误
+				ctx, cancel := context.WithCancel(context.Background())
 				client, err := lis.Accept()
 				if err != nil {
 					log.Printf("Failed to accept connection: %v", err)
 					continue
 				}
 
-				go ContinuousGetTCPState(&client, statMap)
-				go handleClient(client, (cv.Location)[0].Backend.ByPass)
+				go ContinuousGetTCPState(ctx, &client, statMap)
+				go handleClient(cancel, &client, (cv.Location)[0].Backend.ByPass)
 			}
 		}()
 	}
@@ -66,14 +83,15 @@ func (gso *ServerOptions) Serve(in any) error {
 	return nil
 }
 
-func handleClient(client net.Conn, targetAddr string) {
+func handleClient(cancel context.CancelFunc, client *net.Conn, targetAddr string) {
 	target, err := net.Dial("tcp", targetAddr)
 	defer func() {
-		client.Close()
+		(*client).Close()
 		target.Close()
+		cancel()
 	}()
 
-	if client.LocalAddr().String() == client.RemoteAddr().String() {
+	if (*client).LocalAddr().String() == (*client).RemoteAddr().String() {
 		logrus.Warn("Land Attack detected!")
 		return
 	}
@@ -89,8 +107,8 @@ func handleClient(client net.Conn, targetAddr string) {
 		return
 	}
 
-	reader := bufio.NewReader(client)
-	writer := bufio.NewWriter(client)
+	reader := bufio.NewReader(*client)
+	writer := bufio.NewWriter(*client)
 	targetReader := bufio.NewReader(target)
 	targetWriter := bufio.NewWriter(target)
 
@@ -107,4 +125,35 @@ func handleClient(client net.Conn, targetAddr string) {
 		log.Printf("Error while copying target to client: %v", err)
 	}
 	_ = writer.Flush()
+}
+
+func (gso *ServerOptions) CaptureTCPPacketFiltering(
+	port int, opts ...func(*gopacket.PacketSource, chan<- error)) {
+	h, err := pcap.OpenLive(
+		gso.cfg.Global.Interface,
+		1600,
+		true,
+		pcap.BlockForever,
+	)
+	if err != nil {
+		logrus.Fatal(
+			"pre-filter establishment exception, please check whether the network card problems", err)
+	}
+	defer h.Close()
+
+	filter := fmt.Sprintf("tcp and dst port %d", port)
+	err = h.SetBPFFilter(filter)
+	if err != nil {
+		logrus.Fatal("cannot load filters properly", err)
+	}
+
+	pktSource := gopacket.NewPacketSource(h, h.LinkType())
+	var e = make(chan error, 1)
+	for _, v := range opts {
+		go v(pktSource, e)
+	}
+	err = <-e
+	if err != nil {
+		logrus.Fatal("filtering exception", err)
+	}
 }

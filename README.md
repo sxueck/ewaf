@@ -2,7 +2,13 @@
 
 一个高性能且简单的 WAF
 
-TODO
+## 依赖安装
+
+```bash
+$ sudo apt install libpcap-dev
+```
+
+## TODO
 
 * 阻断 SlowHTTP CC 攻击
 * 支持 IP 白名单和黑名单功能

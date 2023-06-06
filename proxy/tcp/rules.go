@@ -1,7 +1,8 @@
 package tcp
 
 import (
-	"errors"
+	"fmt"
+	"github.com/google/gopacket"
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
@@ -13,9 +14,10 @@ import (
 type CustomRule struct {
 	net.Listener
 	IPAddr string
+	fd     *int
 }
 
-func (cr *CustomRule) Accept() (net.Conn, error) {
+func (cr *CustomRule) Listen() error {
 	if len(cr.IPAddr) == 0 {
 		logrus.Errorf("ipaddr must have value")
 	}
@@ -23,7 +25,7 @@ func (cr *CustomRule) Accept() (net.Conn, error) {
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
 		logrus.Warn("Failed to create socket: ", err)
-		return nil, err
+		return err
 	}
 
 	ip, port, _ := net.SplitHostPort(cr.IPAddr)
@@ -31,43 +33,46 @@ func (cr *CustomRule) Accept() (net.Conn, error) {
 
 	addr := syscall.SockaddrInet4{Port: p}
 
-	logrus.Println(ip, port, 1)
 	copy(addr.Addr[:], net.ParseIP(ip).To4())
 	err = syscall.Bind(fd, &addr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_DEFER_ACCEPT, 1)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = syscall.Listen(fd, syscall.SOMAXCONN)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	cr.fd = &fd
+	return nil
+}
+
+func (cr *CustomRule) Accept() (net.Conn, error) {
 	var cfd int
-	cfd, _, err = syscall.Accept(fd)
+	var err error
+
+	// 当 Accept 方法完成后，代表连接已经进入了传输层且已经连接建立完成
+	cfd, _, err = syscall.Accept(*cr.fd)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("accept error: %v", err)
 	}
 
 	err = syscall.SetNonblock(cfd, true) // 设置连接为非阻塞模式
 	if err != nil {
-		panic(err)
-	}
-
-	err = cr.checkConnHandshake(cfd) // 检测三次握手标识
-	if err != nil {
 		syscall.Close(cfd)
+		return nil, err
 	}
 
-	connFp := os.NewFile(uintptr(cfd), "")
-	defer connFp.Close()
+	f := os.NewFile(uintptr(cfd), "")
+	defer f.Close()
 
-	conn, err := net.FileConn(connFp)
+	conn, err := net.FileConn(f)
 	if err != nil {
 		return nil, err
 	}
@@ -75,21 +80,13 @@ func (cr *CustomRule) Accept() (net.Conn, error) {
 	return conn, nil
 }
 
-func (cr *CustomRule) checkConnHandshake(connFd int) error {
-	bs := make([]byte, 1024)
-	n, err := syscall.Read(connFd, bs)
-	if err != nil {
-		return err
-	}
-
-	if n < 3 || bs[0] != 0x16 || bs[1] != 0x03 || bs[2] != 0x01 {
-		return errors.New("invalid handshake")
-	}
-	return nil
-}
-
 // 对于基于ACK计数器的防御
 
 // 对于大量SYN_RECV状态的缓解
+
+// WithTCPServerSYNACKRecv 对于服务端接受到异常握手包的拦截
+func WithTCPServerSYNACKRecv(p *gopacket.PacketSource, e chan<- error) {
+
+}
 
 // 达到了阈值，开始进行收敛

@@ -3,7 +3,8 @@
     "rst_conn": 40,
     "reuseport": true,
     "tun_channel_cidr": "172.16.3.0/25",
-    "tcp_management": "disabled"
+    "tcp_management": "disabled",
+    "interface": "eth0"
   },
   "servers": [
     {
@@ -28,7 +29,7 @@
         "location": [
           {
             "backend": {
-              "by_pass": "127.0.0.1:2222"
+              "by_pass": "10.10.3.199:22"
             }
           }
         ]

@@ -12,6 +12,7 @@ type Global struct {
 	Reuseport      bool   `json:"reuseport"`
 	TunChannelCidr string `json:"tun_channel_cidr" mapstructure:"tun_channel_cidr"`
 	TCPManagement  string `json:"tcp_management" mapstructure:"tcp_management"`
+	Interface      string `json:"interface"` // 网口地址
 }
 
 type Frontend struct {
