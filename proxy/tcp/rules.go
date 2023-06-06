@@ -95,21 +95,24 @@ func LoadDenyIPRules(gso *ServerOptions, ips []string) {
 func WithTCPServerSYNACKRecv(p <-chan gopacket.Packet, gso *ServerOptions) {
 	for {
 		select {
-		case packet := <-p:
-			logrus.Warn("SYN ACK Recv: ", packet.String())
+		case packet, ok := <-p:
+			if !ok {
+				logrus.Warn("packet channel closed")
+				return
+			}
 			ipLayer := packet.Layer(layers.LayerTypeIPv4)
 			if ipLayer == nil {
 				continue
 			}
 
 			ip, _ := ipLayer.(*layers.IPv4)
-			logrus.Println(ip.SrcIP.String())
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
 			if tcpLayer == nil {
 				continue
 			}
 
-			tcp, _ := tcpLayer.(*layers.TCP)
+			tcp := tcpLayer.(*layers.TCP)
+			logrus.Println(tcp.SYN, tcp.ACK)
 			if tcp.SYN && tcp.ACK {
 				logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
 				gso.bloom.AddString(ip.SrcIP.String())

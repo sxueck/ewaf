@@ -176,7 +176,8 @@ func (gso *ServerOptions) CaptureTCPPacketFiltering(
 		logrus.Fatal(
 			"pre-filter establishment exception, please check whether the network card problems", err)
 	}
-	defer h.Close()
+
+	//defer h.Close()
 
 	filter := fmt.Sprintf("tcp and dst port %d", port)
 	err = h.SetBPFFilter(filter)
@@ -185,10 +186,7 @@ func (gso *ServerOptions) CaptureTCPPacketFiltering(
 	}
 
 	pktSource := gopacket.NewPacketSource(h, h.LinkType())
-	for p := range pktSource.Packets() {
-		logrus.Info(p.String())
+	for _, v := range opts {
+		go v(pktSource.Packets(), gso)
 	}
-	//for _, v := range opts {
-	//	go v(pktSource.Packets(), gso)
-	//}
 }
