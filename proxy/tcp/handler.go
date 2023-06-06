@@ -8,7 +8,9 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
+	"github.com/sxueck/ewaf/pkg/infra"
 	"github.com/sxueck/ewaf/proxy"
+	"strings"
 
 	"io"
 	"log"
@@ -22,6 +24,7 @@ type ServerOptions struct {
 	ctx    context.Context
 	cfg    *pkg.GlobalConfig
 	FrMark string // frontend mark
+	bloom  *infra.Filter
 }
 
 func (gso *ServerOptions) WithContext(ctx context.Context, cfg *pkg.GlobalConfig) {
@@ -31,6 +34,20 @@ func (gso *ServerOptions) WithContext(ctx context.Context, cfg *pkg.GlobalConfig
 
 func (gso *ServerOptions) Start() any {
 	tcpFrs := proxy.CheckTheSurvivalOfUpstreamServices(gso.cfg.Servers, gso.FrMark)
+	gso.bloom = infra.NewBloom(2048, 3, false)
+
+	go func() {
+		// 定期重置布隆过滤器，动态拒绝连接
+		ticker := time.NewTicker(1 * time.Microsecond)
+		defer ticker.Stop()
+
+		for {
+			<-ticker.C
+			gso.bloom.Reset()
+			LoadDenyIPRules(gso, []string{"127.0.0.1"})
+			ticker.Reset(NextStatusInterval * time.Second)
+		}
+	}()
 	return tcpFrs
 }
 
@@ -60,6 +77,7 @@ func (gso *ServerOptions) Serve(in any) error {
 				return
 			}
 
+			// 过滤规则加载
 			go gso.CaptureTCPPacketFiltering(cv.ListenPort,
 				WithTCPServerSYNACKRecv,
 			)
@@ -71,6 +89,15 @@ func (gso *ServerOptions) Serve(in any) error {
 				if err != nil {
 					log.Printf("Failed to accept connection: %v", err)
 					continue
+				}
+
+				if gso.bloom.KeySize() > 0 {
+					dip := client.RemoteAddr().String()
+					if gso.bloom.TestString(strings.SplitN(dip, ":", 2)[0]) {
+						logrus.Println("deny ip:", dip)
+						_ = client.Close()
+						continue
+					}
 				}
 
 				go ContinuousGetTCPState(ctx, &client, statMap)
@@ -112,23 +139,32 @@ func handleClient(cancel context.CancelFunc, client *net.Conn, targetAddr string
 	targetReader := bufio.NewReader(target)
 	targetWriter := bufio.NewWriter(target)
 
+	// 应对短请求导致的连接关闭，使用双协程解决
+	done := make(chan bool)
 	go func() {
 		_, err = io.Copy(targetWriter, reader)
 		if err != nil {
+			close(done)
 			log.Printf("Error while copying client to target: %v", err)
 		}
 		_ = targetWriter.Flush()
 	}()
 
-	_, err = io.Copy(writer, targetReader)
-	if err != nil {
-		log.Printf("Error while copying target to client: %v", err)
-	}
-	_ = writer.Flush()
+	go func() {
+		_, err = io.Copy(writer, targetReader)
+		if err != nil {
+			done <- true
+			log.Printf("Error while copying target to client: %v", err)
+		}
+		_ = writer.Flush()
+	}()
+
+	<-done
 }
 
 func (gso *ServerOptions) CaptureTCPPacketFiltering(
-	port int, opts ...func(*gopacket.PacketSource, chan<- error)) {
+	port int, opts ...func(*gopacket.PacketSource, *ServerOptions)) {
+
 	h, err := pcap.OpenLive(
 		gso.cfg.Global.Interface,
 		1600,
@@ -148,12 +184,7 @@ func (gso *ServerOptions) CaptureTCPPacketFiltering(
 	}
 
 	pktSource := gopacket.NewPacketSource(h, h.LinkType())
-	var e = make(chan error, 1)
 	for _, v := range opts {
-		go v(pktSource, e)
-	}
-	err = <-e
-	if err != nil {
-		logrus.Fatal("filtering exception", err)
+		go v(pktSource, gso)
 	}
 }

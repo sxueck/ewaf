@@ -3,6 +3,7 @@ package tcp
 import (
 	"fmt"
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
@@ -80,13 +81,36 @@ func (cr *CustomRule) Accept() (net.Conn, error) {
 	return conn, nil
 }
 
+func LoadDenyIPRules(gso *ServerOptions, ips []string) {
+	for _, v := range ips {
+		gso.bloom.AddString(v)
+	}
+}
+
 // 对于基于ACK计数器的防御
 
 // 对于大量SYN_RECV状态的缓解
 
 // WithTCPServerSYNACKRecv 对于服务端接受到异常握手包的拦截
-func WithTCPServerSYNACKRecv(p *gopacket.PacketSource, e chan<- error) {
+func WithTCPServerSYNACKRecv(p *gopacket.PacketSource, gso *ServerOptions) {
+	for packet := range p.Packets() {
+		ipLayer := packet.Layer(layers.LayerTypeIPv4)
+		if ipLayer == nil {
+			continue
+		}
 
+		ip, _ := ipLayer.(*layers.IPv4)
+		tcpLayer := packet.Layer(layers.LayerTypeTCP)
+		if tcpLayer == nil {
+			continue
+		}
+
+		tcp, _ := tcpLayer.(*layers.TCP)
+		if tcp.SYN && tcp.ACK {
+			logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
+			gso.bloom.AddString(ip.SrcIP.String())
+		}
+	}
 }
 
 // 达到了阈值，开始进行收敛
