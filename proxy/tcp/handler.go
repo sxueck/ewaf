@@ -8,9 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
 	"github.com/sxueck/ewaf/pkg/infra"
+	"github.com/sxueck/ewaf/pkg/utils/water"
 	"github.com/sxueck/ewaf/proxy"
-	"strings"
-
 	"log"
 	"net"
 	"strconv"
@@ -43,7 +42,7 @@ func (gso *ServerOptions) Start() any {
 			<-ticker.C
 			gso.bloom.Reset()
 			LoadDenyIPRules(gso, nil)
-			ticker.Reset(NextStatusInterval * time.Second)
+			ticker.Reset(NextStatusInterval * time.Second * 60) // 120s
 		}
 	}()
 	return tcpFrs
@@ -92,7 +91,7 @@ func (gso *ServerOptions) Serve(in any) error {
 				client, _ := net.FileConn(f)
 				if gso.bloom.KeySize() > 0 {
 					dip := client.RemoteAddr().String()
-					if gso.bloom.TestString(strings.SplitN(dip, ":", 2)[0]) {
+					if gso.bloom.TestString(water.ReIPAddress(dip)) {
 						logrus.Println("deny ip:", dip)
 						_ = client.Close()
 						continue

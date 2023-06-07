@@ -5,10 +5,10 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"net"
 	"os"
 	"strconv"
-	"syscall"
 )
 
 // CustomRule 重载连接行为，用于实现底层的自定义连接规则
@@ -23,7 +23,7 @@ func (cr *CustomRule) Listen() error {
 		logrus.Errorf("ipaddr must have value")
 	}
 
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, unix.IPPROTO_TCP)
 	if err != nil {
 		logrus.Warn("Failed to create socket: ", err)
 		return err
@@ -32,20 +32,20 @@ func (cr *CustomRule) Listen() error {
 	ip, port, _ := net.SplitHostPort(cr.IPAddr)
 	p, _ := strconv.Atoi(port)
 
-	addr := syscall.SockaddrInet4{Port: p}
+	addr := unix.SockaddrInet4{Port: p}
 
 	copy(addr.Addr[:], net.ParseIP(ip).To4())
-	err = syscall.Bind(fd, &addr)
+	err = unix.Bind(fd, &addr)
 	if err != nil {
 		return err
 	}
 
-	err = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_DEFER_ACCEPT, 1)
+	err = unix.SetsockoptInt(fd, unix.IPPROTO_TCP, unix.TCP_DEFER_ACCEPT, 1)
 	if err != nil {
 		return err
 	}
 
-	err = syscall.Listen(fd, syscall.SOMAXCONN)
+	err = unix.Listen(fd, unix.SOMAXCONN)
 	if err != nil {
 		return err
 	}
@@ -60,14 +60,14 @@ func (cr *CustomRule) AcceptToFD() (*os.File, error) {
 	var err error
 
 	// 当 Accept 方法完成后，代表连接已经进入了传输层且已经连接建立完成
-	cfd, _, err = syscall.Accept(*cr.fd)
+	cfd, _, err = unix.Accept(*cr.fd)
 	if err != nil {
 		return nil, fmt.Errorf("accept error: %v", err)
 	}
 
-	err = syscall.SetNonblock(cfd, true) // 设置连接为非阻塞模式
+	err = unix.SetNonblock(cfd, true) // 设置连接为非阻塞模式
 	if err != nil {
-		syscall.Close(cfd)
+		unix.Close(cfd)
 		return nil, err
 	}
 
@@ -107,7 +107,10 @@ func WithTCPServerSYNACKRecv(p <-chan gopacket.Packet, gso *ServerOptions) {
 
 			tcp := tcpLayer.(*layers.TCP)
 			if tcp.SYN && tcp.ACK {
-				logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
+				logrus.Warn(
+					"malicious packets are detected and the source ip has been added to the block list (SYN+ACK): ",
+					ip.SrcIP.String(),
+				)
 				gso.bloom.AddString(ip.SrcIP.String())
 			}
 		}

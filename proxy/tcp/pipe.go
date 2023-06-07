@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"io"
 	"net"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -20,7 +20,7 @@ func setNonblock(conn net.Conn) (*os.File, error) {
 		return nil, err
 	}
 
-	if err := syscall.SetNonblock(int(fp.Fd()), true); err != nil {
+	if err = unix.SetNonblock(int(fp.Fd()), true); err != nil {
 		return nil, err
 	}
 
@@ -42,13 +42,13 @@ func splicePipes(src, dst *os.File) error {
 	}()
 
 	for {
-		nr, err := syscall.Splice(int(src.Fd()), nil, int(w.Fd()), nil, bufSize, 0)
+		nr, err := unix.Splice(int(src.Fd()), nil, int(w.Fd()), nil, bufSize, 0)
 		if err != nil {
-			if err == syscall.EAGAIN {
+			if err == unix.EAGAIN {
 				continue
 			}
 
-			if err == syscall.EINVAL {
+			if err == unix.EINVAL {
 				// 不支持splice则回退到io.copy
 				_, err := io.Copy(dst, src)
 				if err != nil {
@@ -59,7 +59,7 @@ func splicePipes(src, dst *os.File) error {
 		}
 
 		if nr > 0 {
-			_, err := syscall.Splice(int(r.Fd()), nil, int(dst.Fd()), nil, int(nr), 0)
+			_, err := unix.Splice(int(r.Fd()), nil, int(dst.Fd()), nil, int(nr), 0)
 			if err != nil {
 				return err
 			}

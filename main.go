@@ -17,7 +17,9 @@ func main() {
 
 	// start internal proxy interfaces
 	for _, f := range []proxy.StartServ{
-		&tcp.ServerOptions{FrMark: "tcp"}} {
+		&tcp.ServerOptions{FrMark: "tcp"},
+		//&http.ServerOptions{FrMark: "http"},
+	} {
 		go func(f proxy.StartServ) {
 			f.WithContext(ctx, cfg.(*pkg.GlobalConfig))
 			out := f.Start()
