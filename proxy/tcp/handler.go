@@ -1,7 +1,6 @@
 package tcp
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github.com/google/gopacket"
@@ -12,7 +11,6 @@ import (
 	"github.com/sxueck/ewaf/proxy"
 	"strings"
 
-	"io"
 	"log"
 	"net"
 	"strconv"
@@ -85,13 +83,13 @@ func (gso *ServerOptions) Serve(in any) error {
 			for {
 				// 如果不做限制，会出现重复使用已关闭连接的错误
 				ctx, cancel := context.WithCancel(context.Background())
-				client, err := lis.Accept()
+				f, err := lis.AcceptToFD()
 				if err != nil {
 					log.Printf("Failed to accept connection: %v", err)
 					continue
 				}
-				log.Println("new client:", client.RemoteAddr().String())
 
+				client, _ := net.FileConn(f)
 				if gso.bloom.KeySize() > 0 {
 					dip := client.RemoteAddr().String()
 					if gso.bloom.TestString(strings.SplitN(dip, ":", 2)[0]) {
@@ -102,7 +100,8 @@ func (gso *ServerOptions) Serve(in any) error {
 				}
 
 				go ContinuousGetTCPState(ctx, &client, statMap)
-				go handleClient(cancel, &client, (cv.Location)[0].Backend.ByPass)
+				// f为请求端的socket描述符
+				go handleClient(cancel, f, (cv.Location)[0].Backend.ByPass)
 			}
 		}()
 	}
@@ -111,73 +110,21 @@ func (gso *ServerOptions) Serve(in any) error {
 	return nil
 }
 
-func handleClient(cancel context.CancelFunc, client *net.Conn, targetAddr string) {
-	target, err := net.Dial("tcp", targetAddr)
-	defer func() {
-		(*client).Close()
-		target.Close()
-		cancel()
-	}()
-
-	if (*client).LocalAddr().String() == (*client).RemoteAddr().String() {
-		logrus.Warn("Land Attack detected!")
-		return
-	}
-
-	tcpConn, ok := target.(*net.TCPConn)
-	if ok {
-		_ = tcpConn.SetKeepAlive(true)
-		_ = tcpConn.SetKeepAlivePeriod(3 * time.Minute)
-	}
-
-	if err != nil {
-		log.Printf("Failed to connect to target: %v", err)
-		return
-	}
-
-	reader := bufio.NewReader(*client)
-	writer := bufio.NewWriter(*client)
-	targetReader := bufio.NewReader(target)
-	targetWriter := bufio.NewWriter(target)
-
-	// 应对短请求导致的连接关闭，使用双协程解决
-	done := make(chan bool)
-	go func() {
-		_, err = io.Copy(targetWriter, reader)
-		if err != nil {
-			close(done)
-			log.Printf("Error while copying client to target: %v", err)
-		}
-		_ = targetWriter.Flush()
-	}()
-
-	go func() {
-		_, err = io.Copy(writer, targetReader)
-		if err != nil {
-			done <- true
-			log.Printf("Error while copying target to client: %v", err)
-		}
-		_ = writer.Flush()
-	}()
-
-	<-done
-}
-
 func (gso *ServerOptions) CaptureTCPPacketFiltering(
 	port int, opts ...func(<-chan gopacket.Packet, *ServerOptions)) {
 
+	iface, err := net.InterfaceByName(gso.cfg.Global.Interface)
+	if err != nil {
+		log.Fatal(err)
+	}
 	h, err := pcap.OpenLive(
-		gso.cfg.Global.Interface,
-		1600,
-		true,
+		iface.Name, 1600, true,
 		pcap.BlockForever,
 	)
 	if err != nil {
 		logrus.Fatal(
 			"pre-filter establishment exception, please check whether the network card problems", err)
 	}
-
-	//defer h.Close()
 
 	filter := fmt.Sprintf("tcp and dst port %d", port)
 	err = h.SetBPFFilter(filter)

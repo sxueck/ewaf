@@ -54,7 +54,8 @@ func (cr *CustomRule) Listen() error {
 	return nil
 }
 
-func (cr *CustomRule) Accept() (net.Conn, error) {
+// AcceptToFD 返回socket的文件描述符，后续零拷贝后无需再次进行转换
+func (cr *CustomRule) AcceptToFD() (*os.File, error) {
 	var cfd int
 	var err error
 
@@ -71,14 +72,7 @@ func (cr *CustomRule) Accept() (net.Conn, error) {
 	}
 
 	f := os.NewFile(uintptr(cfd), "")
-	defer f.Close()
-
-	conn, err := net.FileConn(f)
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
+	return f, nil
 }
 
 func LoadDenyIPRules(gso *ServerOptions, ips []string) {
@@ -112,7 +106,6 @@ func WithTCPServerSYNACKRecv(p <-chan gopacket.Packet, gso *ServerOptions) {
 			}
 
 			tcp := tcpLayer.(*layers.TCP)
-			logrus.Println(tcp.SYN, tcp.ACK)
 			if tcp.SYN && tcp.ACK {
 				logrus.Warn("SYN ACK Recv: ", ip.SrcIP.String())
 				gso.bloom.AddString(ip.SrcIP.String())

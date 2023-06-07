@@ -191,10 +191,12 @@ func GetTCPState(conn *net.TCPConn, statMap *StatMap) error {
 	}
 	state = binary.LittleEndian.Uint32(buf)
 
-	// 将获取到的状态添加到 TCPStatMap
 	statMap.Add(remoteAddr, localAddr, State(state))
 
+	statMap.RWMutex.Lock()
 	n := statMap.m[hashRemoteLocalAddr(remoteAddr, localAddr)].State
+	statMap.RWMutex.Unlock()
+
 	if n == StateUnknown || n == StateClosed || n == StateClosing {
 		statMap.Remove(remoteAddr, localAddr)
 	}
