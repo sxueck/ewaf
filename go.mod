@@ -5,9 +5,9 @@ go 1.19
 require (
 	github.com/google/gopacket v1.1.19
 	github.com/sirupsen/logrus v1.9.0
-	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/viper v1.13.0
+	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
 	golang.org/x/sys v0.1.0
 )
@@ -24,6 +24,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
+	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

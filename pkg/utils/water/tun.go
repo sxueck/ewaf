@@ -4,7 +4,9 @@ package water
 
 import (
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ const (
 	defaultMTU     = 1420
 	ifReqSize      = unix.IFNAMSIZ + 0x40
 	tunDevicePoint = "/dev/net/tun"
+	TunLabel       = "ewaf-tun"
 )
 
 type TUNConfigure struct {
@@ -78,10 +81,76 @@ func NewTUNConfigure(tunName string) *TUNConfigure {
 	}
 }
 
+func (tun *TUNConfigure) AssignTunChannelAddress(tunConfig *TUNConfigure, cidr string) error {
+	iface, err := netlink.LinkByName(tunConfig.interfaceName)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netlink.AddrList(iface, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+
+	for _, addr := range addrs {
+		err = netlink.AddrDel(iface, &addr)
+		if err != nil {
+			logrus.Println(err)
+		}
+	}
+
+	addr := &netlink.Addr{
+		IPNet: &net.IPNet{
+			IP:   net.ParseIP(GetCidrIP(cidr)),
+			Mask: net.CIDRMask(31, 32),
+		},
+	}
+
+	return netlink.AddrAdd(iface, addr)
+}
+
+func (tun *TUNConfigure) DeleteTUNChannel(tunConfig *TUNConfigure) {
+	iface, err := netlink.LinkByName(tunConfig.interfaceName)
+	if err != nil {
+		logrus.Warn(err)
+	}
+
+	err = netlink.LinkDel(iface)
+	if err != nil {
+		logrus.Warn(err)
+	}
+}
+
 func (tun *TUNConfigure) File() *os.File {
 	return tun.tunFp
 }
 
 func ReIPAddress(fullIP string) string {
 	return strings.SplitN(fullIP, ":", 2)[0]
+}
+
+func GetCidrIP(cidr string) string {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return ""
+	}
+
+	// 将网络地址转换为无符号整数
+	start := ipNet.IP.To4().Mask(ipNet.Mask)
+
+	// 将无符号整数加上偏移量，得到目标 IP 地址
+	for i := 1; i < 20; i++ {
+		incrementIP(start)
+	}
+
+	return start.String()
+}
+
+func incrementIP(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
 }
