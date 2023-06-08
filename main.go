@@ -18,7 +18,7 @@ import (
 func main() {
 	cfg := config.InitParse(&pkg.GlobalConfig{})
 	// global channel context
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// start internal proxy interfaces
 	for _, f := range []proxy.StartServ{
@@ -47,6 +47,7 @@ func main() {
 	select {
 	case <-sigterm:
 		logrus.Println("stop and clean all services")
+		cancel()
 	case <-ctx.Done():
 	}
 	<-time.NewTicker(1 * time.Second).C
