@@ -27,7 +27,6 @@ type Server struct {
 }
 
 type Backend struct {
-	Method string `json:"method"`
 	ByPass string `json:"by_pass" mapstructure:"by_pass"`
 }
 

@@ -15,7 +15,7 @@
         "location": [
           {
             "backend": {
-              "by_pass": "https://www.sxueck.com"
+              "by_pass": "http://127.0.0.1"
             }
           }
         ]
