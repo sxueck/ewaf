@@ -8,11 +8,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/sxueck/ewaf/pkg"
 	"github.com/sxueck/ewaf/pkg/infra"
-	"github.com/sxueck/ewaf/pkg/utils/water"
 	"github.com/sxueck/ewaf/proxy"
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,6 +27,10 @@ type ServerOptions struct {
 func (gso *ServerOptions) WithContext(ctx context.Context, cfg *pkg.GlobalConfig) {
 	gso.ctx = ctx
 	gso.cfg = cfg
+}
+
+func (gso *ServerOptions) ExtraFrMark() string {
+	return gso.FrMark
 }
 
 func (gso *ServerOptions) Start() any {
@@ -91,7 +95,7 @@ func (gso *ServerOptions) Serve(in any) error {
 				client, _ := net.FileConn(f)
 				if gso.bloom.KeySize() > 0 {
 					dip := client.RemoteAddr().String()
-					if gso.bloom.TestString(water.ReIPAddress(dip)) {
+					if gso.bloom.TestString(ReIPAddress(dip)) {
 						logrus.Println("deny ip:", dip)
 						_ = client.Close()
 						continue
@@ -135,4 +139,8 @@ func (gso *ServerOptions) CaptureTCPPacketFiltering(
 	for _, v := range opts {
 		go v(pktSource.Packets(), gso)
 	}
+}
+
+func ReIPAddress(fullIP string) string {
+	return strings.SplitN(fullIP, ":", 2)[0]
 }

@@ -12,6 +12,8 @@ type StartServ interface {
 	Start() any
 	Stop()
 	Serve(any) error
+
+	ExtraFrMark() string
 }
 
 func CheckTheSurvivalOfUpstreamServices(frs []pkg.Server, frsMark string) []pkg.Frontend {

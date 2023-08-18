@@ -1,0 +1,15 @@
+[Unit]
+Description=EWaf TCP Reverse Proxy
+After=network.target
+
+[Service]
+WorkingDirectory=/etc/ewaf
+ExecStart=/etc/ewaf/ewaf
+ExecReload=/bin/kill -1 -- $MAINPID
+ExecStop=/bin/kill -- $MAINPID
+Type=simple
+Restart=always
+
+[Install]
+WantedBy=default.target
+RequiredBy=network.target

@@ -16,9 +16,10 @@ import (
 )
 
 func main() {
+	//logrus.SetReportCaller(true)
 	cfg := config.InitParse(&pkg.GlobalConfig{})
 	// global channel context
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// start internal proxy interfaces
 	for _, f := range []proxy.StartServ{
@@ -29,6 +30,10 @@ func main() {
 			defer f.Stop()
 			f.WithContext(ctx, cfg.(*pkg.GlobalConfig))
 			out := f.Start()
+			if out == nil {
+				logrus.Printf("no proxy of this type exists or fails : %s", f.ExtraFrMark())
+				return
+			}
 			if rt := reflect.TypeOf(out); rt.Implements(reflect.TypeOf((*error)(nil)).Elem()) {
 				logrus.Printf("fatal start internal server : %s", out)
 				return
@@ -47,6 +52,7 @@ func main() {
 	select {
 	case <-sigterm:
 		logrus.Println("stop and clean all services")
+		cancel()
 	case <-ctx.Done():
 	}
 	<-time.NewTicker(1 * time.Second).C
