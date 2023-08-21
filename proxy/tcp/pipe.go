@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const maxDelay = 1 * time.Second
+
 // 使用splice的时候，需要将文件描述符设置为非阻塞模式
 func setNonblock(conn net.Conn) (*os.File, error) {
 	tcpConn := conn.(*net.TCPConn)
@@ -41,22 +43,31 @@ func splicePipes(src, dst *os.File) error {
 		w.Close()
 	}()
 
+	delay := time.Millisecond
 	for {
-		nr, err := unix.Splice(int(src.Fd()), nil, int(w.Fd()), nil, bufSize, 0)
+		var nr int64
+		nr, err = unix.Splice(int(src.Fd()), nil, int(w.Fd()), nil, bufSize, 0)
 		if err != nil {
 			if err == unix.EAGAIN {
+				<-time.After(delay)
+				if delay < maxDelay {
+					delay *= 2
+				}
 				continue
 			}
 
 			if err == unix.EINVAL {
-				// 不支持splice则回退到io.copy
-				_, err := io.Copy(dst, src)
+				// 不支持splice则回退到 io.copy
+				_, err = io.Copy(dst, src)
 				if err != nil {
 					return fmt.Errorf("io.copy error: %v", err)
 				}
 			}
 			return err
 		}
+
+		// Reset delay after successful splice
+		delay = time.Millisecond
 
 		if nr > 0 {
 			_, err := unix.Splice(int(r.Fd()), nil, int(dst.Fd()), nil, int(nr), 0)
